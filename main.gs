@@ -22,7 +22,7 @@ proc fetch {
 proc decode {
     # Extract "nibbles" from opcode
     local instruction = cpu.opcode[1];
-    local N = ("0x" & cpu.opcode[4]) + 0;
+    local N = ("0x" & cpu.opcode[4]) + 0; # Add 0 to convert from hex to decimal
     local NN = ("0x" & (cpu.opcode[3] & cpu.opcode[4])) + 0;
     local NNN = ("0x" & (cpu.opcode[2] & cpu.opcode[3] & cpu.opcode[4])) + 0;
     local X = cpu.opcode[2];
@@ -30,40 +30,40 @@ proc decode {
     # Big if else statement since Scratch (and by extension goboscript) doesn't have switch statements
     if instruction == 0 {
         decode0 NN; # 0x0 opcode is moved to a separate proc
-    } elif instruction == 1 { # Sets pc to NNN, or last 3 digits of opcode in hex
+    } elif instruction == 1 { # Sets pc to NNN, or last 3 digits of opcode in hex (1NNN)
         cpu.pc = NNN;
-    } elif instruction == 2 { # Pushes current value of pc into stack, then sets pc to NNN
+    } elif instruction == 2 { # Pushes current value of pc into stack, then sets pc to NNN (2NNN)
         add cpu.pc to stack;
         cpu.pc = NNN;
-    } elif instruction == 3 { # Check if v[x] == NN, and if true, skip an instruction by increasing pc by 2
+    } elif instruction == 3 { # Check if v[x] == NN, and if true, skip an instruction by increasing pc by 2 (3XNN)
         if getregister(X) == NN {
             cpu.pc += 2;
         }
-    } elif instruction == 4 { # Check if v[x] != NN, and if true, skip an instruction by increasing pc by 2
+    } elif instruction == 4 { # Check if v[x] != NN, and if true, skip an instruction by increasing pc by 2 (4XNN)
         if getregister(X) != NN {
             cpu.pc += 2;
         }
-    } elif instruction == 5 { # Check if v[x] == v[y], and if true, skip an instruction by increasing pc by 2
+    } elif instruction == 5 { # Check if v[x] == v[y], and if true, skip an instruction by increasing pc by 2 (5XY0)
         if getregister(X) == getregister(Y) {
             cpu.pc += 2;
         }
-    } elif instruction == 6 { # Set v[x] to NN
-        setregister(X, NN + 0);
-    } elif instruction == 7 { # Add NN to v[x] (255 as max, otherwise overflow)
-        setregister(X, (getregister(X) + (NN + 0)) % 256);
+    } elif instruction == 6 { # Set v[x] to NN (6XNN)
+        setregister(X, NN);
+    } elif instruction == 7 { # Add NN to v[x] (255 as max, otherwise overflow) (7XNN)
+        setregister(X, (getregister(X) + (NN)) % 256);
     } elif instruction == 8 {
         decode8 X, Y, N; # 0x8 opcode is moved to a separate proc
-    } elif instruction == 9 { # Check if v[x] != v[y], and if true, skip an instruction by increasing pc by 2
+    } elif instruction == 9 { # Check if v[x] != v[y], and if true, skip an instruction by increasing pc by 2 (9XY0)
         if getregister(X) != getregister(Y) {
             cpu.pc += 2;
         }
-    } elif instruction == "A" { # Set the index register to NNN
+    } elif instruction == "A" { # Set the index register to NNN (ANNN)
         cpu.index = NNN;
-    } elif instruction == "B" { # Set pc to NNN + v[x]
+    } elif instruction == "B" { # Set pc to NNN + v[x] (BNNN)
         cpu.pc = NNN + getregister(X);
-    } elif instruction == "C" { # Set v[x] to a some random number that is ANDed with NN
+    } elif instruction == "C" { # Set v[x] to a some random number that is ANDed with NN (CXNN)
         setregister(X, bwAND(random(0, 255), NN));
-    } elif instruction == "D" { # Draw...
+    } elif instruction == "D" { # Draw... (DXYN)
         local xpos = getregister(X) % cpu.cols;
         local ypos = getregister(Y) % cpu.rows;
         local row = 0;
@@ -97,10 +97,10 @@ proc decode {
 
 proc decode0 NN {
     local NN = $NN;
-    if NN == 224 { # Clears the display, what this does is delete all of the display list, then render to make changes
+    if NN == 224 { # Clears the display, what this does is delete all of the display list, then render to make changes (00E0)
         delete display;
         broadcast "render";
-    } elif NN == 238 { # Returns from subroutine by popping from stack
+    } elif NN == 238 { # Returns from subroutine by popping from stack (00EE)
         cpu.pc = stack[length stack];
         delete stack[length stack];
     } else {
@@ -112,15 +112,15 @@ proc decode8 X, Y, N {
     local X = $X;
     local Y = $Y;
     local N = $N;
-    if N == 0 { # Set v[x] to v[y]
+    if N == 0 { # Set v[x] to v[y] (8XY0)
         setregister(X, getregister(Y));
-    } elif N == 1 { # Set v[x] to v[x] | v[y] (bitwise OR)
+    } elif N == 1 { # Set v[x] to v[x] | v[y] (bitwise OR) (8XY1)
         setregister(X, bwOR(getregister(X), getregister(Y)));
-    } elif N == 2 { # Set v[x] to v[x] & v[y] (bitwise AND)
+    } elif N == 2 { # Set v[x] to v[x] & v[y] (bitwise AND) (8XY2)
         setregister(X, bwAND(getregister(X), getregister(Y)));
-    } elif N == 3 { # Set v[x] to v[x] ^ v[y] (bitwise XOR)
+    } elif N == 3 { # Set v[x] to v[x] ^ v[y] (bitwise XOR) (8XY3)
         setregister(X, bwXOR(getregister(X), getregister(Y)));
-    } elif N == 4 { # Add v[y] to v[x] (255 as max, otherwise overflow and set v[F] to 1)
+    } elif N == 4 { # Add v[y] to v[x] (255 as max, otherwise overflow and set v[F] to 1) (8XY4)
         local i = getregister(X) + getregister(Y); # store comparison in advance to set v[F]
         setregister(X, i % 256);
         if i > 255 {
@@ -128,7 +128,7 @@ proc decode8 X, Y, N {
         } else {
             setregister("F", 0);
         }
-    } elif N == 5 { # Subtract v[y] from v[x] (0 as min and v[F] = 1, otherwise underflow and set v[F] to 0)
+    } elif N == 5 { # Subtract v[y] from v[x] (0 as min and v[F] = 1, otherwise underflow and set v[F] to 0) (8XY5)
         local i = getregister(X) - getregister(Y);
         setregister(X, i % 256);
         if i < 0 {
@@ -136,11 +136,11 @@ proc decode8 X, Y, N {
         } else {
             setregister("F", 1);
         }
-    } elif N == 6 { # Set v[F] to the least significant bit (or the bit that will be shifted out), then bit shift v[x] to the right by 1
+    } elif N == 6 { # Set v[F] to the least significant bit (or the bit that will be shifted out), then bit shift v[x] to the right by 1 (8XY6)
         local i = bwAND(getregister(X), 1); # store v[x] in advance to set v[F] using previous v[x] value
         setregister(X, rshift(getregister(X), 1));
         setregister("F", i);
-    } elif N == 7 { # Set v[x] to v[y] - v[x] (subtract v[x] from v[y] and set v[x] to that result) (0 as min and v[F] = 1, otherwise underflow and set v[F] to 0)
+    } elif N == 7 { # Set v[x] to v[y] - v[x] (subtract v[x] from v[y] and set v[x] to that result) (0 as min and v[F] = 1, otherwise underflow and set v[F] to 0) (8XY7)
         local i = getregister(Y) - getregister(X);
         setregister(X, i % 256);
         if i < 0 {
@@ -148,7 +148,7 @@ proc decode8 X, Y, N {
         } else {
             setregister("F", 1);
         }
-    } elif N == 14 { # Set v[F] to the least significant bit (or the bit that will be shifted out), then bit shift v[x] to the left by 1 (255 as max, otherwise overflow)
+    } elif N == 14 { # Set v[F] to the least significant bit (or the bit that will be shifted out), then bit shift v[x] to the left by 1 (255 as max, otherwise overflow) (8XYE)
         local i = bwAND(getregister(X), 128);
         setregister(X, lshift(getregister(X), 1) % 256);
         setregister("F", 0);
@@ -163,11 +163,11 @@ proc decode8 X, Y, N {
 proc decodeE X, NN {
     local X = $X;
     local NN = $NN;
-    if NN == 158 { # Check if v[x] is in keys pressed, and if true, skip an instruction by increasing pc by 2
+    if NN == 158 { # Check if v[x] is in keys pressed, and if true, skip an instruction by increasing pc by 2 (EX9E)
         if (getregister(X) in keypad) > 0 {
             cpu.pc += 2;
         }
-    } elif NN == 161 { # Check if v[x] is NOT in keys pressed, and if true, skip an instruction by increasing pc by 2
+    } elif NN == 161 { # Check if v[x] is NOT in keys pressed, and if true, skip an instruction by increasing pc by 2 (EXA1)
         if not ((getregister(X) in keypad) > 0) {
             cpu.pc += 2;
         }
