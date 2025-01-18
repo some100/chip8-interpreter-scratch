@@ -71,10 +71,10 @@ proc decode {
         repeat N {
             local col = 0;
             repeat 8 {
-                local spritepixel = getmemory(cpu.index + row);
+                local spritepixel = bwAND(getmemory(cpu.index + row), rshift(128, col));
                 local screenpixel = (ypos + row) * cpu.cols + (xpos + col);
-                if bwAND(spritepixel, rshift(128, col)) > 0 {
-                    if screenpixel in display {
+                if spritepixel > 0 {
+                    if (screenpixel in display) > 0 {
                         setregister("F", 1);
                         delete display[screenpixel];
                     } else {
@@ -121,7 +121,7 @@ proc decode8 X, Y, N {
     } elif N == 3 { # Set v[x] to v[x] ^ v[y] (bitwise XOR)
         setregister(X, bwXOR(getregister(X), getregister(Y)));
     } elif N == 4 { # Add v[y] to v[x] (255 as max, otherwise overflow and set v[F] to 1)
-        i = getregister(X) + getregister(Y); # store comparison in advance to set v[F]
+        local i = getregister(X) + getregister(Y); # store comparison in advance to set v[F]
         setregister(X, i % 256);
         if i > 255 {
             setregister("F", 1);
@@ -182,7 +182,13 @@ proc decodeF X, NN {
     if NN == 7 { # Set v[x] to delaytimer (FX07)
         setregister(X, cpu.delaytimer);
     } elif NN == 10 { # Blocks execution until a key is pressed, then waits for that key to be released and records it in v[x] (FX0A)
-        # TBD (likely to require significant refactoring)
+        # TBD (seems working but this looks like a possible race condition)
+        if key_pressed(realkeypad[1]) {
+            registers[X + 1] = keypad[1];
+            cpu.pc -= 2;
+        } elif registers[X + 1] != keypad[1] {
+            cpu.pc -= 2;
+        }
     } elif NN == 21 { # Set delaytimer to v[x] (FX15)
         cpu.delaytimer = getregister(X);
     } elif NN == 24 { # Set soundtimer to v[x] (FX18)
@@ -198,13 +204,13 @@ proc decodeF X, NN {
     } elif NN == 85 { # Store values of registers v[0] to v[x] (inclusive) into memory starting from index (FX55)
         local i = 0;
         repeat (("0x" & X) + 1) {
-            memory[cpu.index + i] = dec2hex(getregister(i));
+            memory[cpu.index + i] = dec2hex(registers[i + 1]);
             i++;
         }
-    } elif NN == 101 {
+    } elif NN == 101 { # Load values of memory[i] starting from index into registers v[0] to v[x] (inclusive) (FX65)
         local i = 0;
-        repeat (("0x" & X) + 1) { # Load values of memory[i] starting from index into registers v[0] to v[x] (inclusive) (FX65)
-            setregister(i, getmemory(cpu.index + i));
+        repeat (("0x" & X) + 1) {
+            registers[i + 1] = getmemory(cpu.index + i);
             i++;
         }
     } else {
@@ -214,5 +220,5 @@ proc decodeF X, NN {
 
 proc panic {
     say "Instruction " & cpu.opcode & " at pc " & cpu.pc & " does not exist!";
-    stop_this_script;
+    stop_all;
 }

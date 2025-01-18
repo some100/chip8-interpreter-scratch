@@ -61,5 +61,6 @@ list registers;
 list stack;
 list display;
 list keypad;
+list realkeypad;
 list memory;
 list font = file ```files/font.txt```;
