@@ -72,11 +72,11 @@ proc decode {
             local col = 0;
             repeat 8 {
                 local spritepixel = bwAND(getmemory(cpu.index + row), rshift(128, col));
-                local screenpixel = (ypos + row) * cpu.cols + (xpos + col);
+                local screenpixel = ((ypos + row) % 32) * cpu.cols + ((xpos + col) % 64);
                 if spritepixel > 0 {
                     if (screenpixel in display) > 0 {
                         setregister("F", 1);
-                        delete display[screenpixel];
+                        delete display[screenpixel in display];
                     } else {
                         add screenpixel to display;
                     }
@@ -220,5 +220,4 @@ proc decodeF X, NN {
 
 proc panic {
     say "Instruction " & cpu.opcode & " at pc " & cpu.pc & " does not exist!";
-    stop_all;
 }
