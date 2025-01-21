@@ -8,6 +8,12 @@ costumes "files/blank.svg";
 
 on "main" {
     forever {
+        main;
+    }
+}
+
+proc main {
+    repeat cpu.speed {
         fetch;
         decode;
     }
@@ -36,17 +42,11 @@ proc decode {
         add cpu.pc to stack;
         cpu.pc = NNN;
     } elif instruction == 3 { # Check if v[x] == NN, and if true, skip an instruction by increasing pc by 2 (3XNN)
-        if getregister(X) == NN {
-            cpu.pc += 2;
-        }
+        skipinstructionif getregister(X) == NN;
     } elif instruction == 4 { # Check if v[x] != NN, and if true, skip an instruction by increasing pc by 2 (4XNN)
-        if getregister(X) != NN {
-            cpu.pc += 2;
-        }
+        skipinstructionif getregister(X) != NN;
     } elif instruction == 5 { # Check if v[x] == v[y], and if true, skip an instruction by increasing pc by 2 (5XY0)
-        if getregister(X) == getregister(Y) {
-            cpu.pc += 2;
-        }
+        skipinstructionif getregister(X) == getregister(Y);
     } elif instruction == 6 { # Set v[x] to NN (6XNN)
         setregister(X, NN);
     } elif instruction == 7 { # Add NN to v[x] (255 as max, otherwise overflow) (7XNN)
@@ -54,9 +54,7 @@ proc decode {
     } elif instruction == 8 {
         decode8 X, Y, N; # 0x8 opcode is moved to a separate proc
     } elif instruction == 9 { # Check if v[x] != v[y], and if true, skip an instruction by increasing pc by 2 (9XY0)
-        if getregister(X) != getregister(Y) {
-            cpu.pc += 2;
-        }
+        skipinstructionif getregister(X) != getregister(Y);
     } elif instruction == "A" { # Set the index register to NNN (ANNN)
         cpu.index = NNN;
     } elif instruction == "B" { # Set pc to NNN + v[x] (BNNN)
@@ -123,19 +121,11 @@ proc decode8 X, Y, N {
     } elif N == 4 { # Add v[y] to v[x] (255 as max, otherwise overflow and set v[F] to 1) (8XY4)
         local i = getregister(X) + getregister(Y); # store comparison in advance to set v[F]
         setregister(X, i % 256);
-        if i > 255 {
-            setregister("F", 1);
-        } else {
-            setregister("F", 0);
-        }
+        setflagregisterif i > 255;
     } elif N == 5 { # Subtract v[y] from v[x] (0 as min and v[F] = 1, otherwise underflow and set v[F] to 0) (8XY5)
         local i = getregister(X) - getregister(Y);
         setregister(X, i % 256);
-        if i < 0 {
-            setregister("F", 0);
-        } else {
-            setregister("F", 1);
-        }
+        setflagregisterif i > 0;
     } elif N == 6 { # Set v[F] to the least significant bit (or the bit that will be shifted out), then bit shift v[x] to the right by 1 (8XY6)
         local i = bwAND(getregister(X), 1); # store v[x] in advance to set v[F] using previous v[x] value
         setregister(X, rshift(getregister(X), 1));
@@ -143,18 +133,11 @@ proc decode8 X, Y, N {
     } elif N == 7 { # Set v[x] to v[y] - v[x] (subtract v[x] from v[y] and set v[x] to that result) (0 as min and v[F] = 1, otherwise underflow and set v[F] to 0) (8XY7)
         local i = getregister(Y) - getregister(X);
         setregister(X, i % 256);
-        if i < 0 {
-            setregister("F", 0);
-        } else {
-            setregister("F", 1);
-        }
+        setflagregisterif i > 0;
     } elif N == 14 { # Set v[F] to the least significant bit (or the bit that will be shifted out), then bit shift v[x] to the left by 1 (255 as max, otherwise overflow) (8XYE)
         local i = bwAND(getregister(X), 128);
         setregister(X, lshift(getregister(X), 1) % 256);
-        setregister("F", 0);
-        if i > 0 {
-            setregister("F", 1);
-        }
+        setflagregisterif i > 0;
     } else {
         panic;
     }
@@ -164,13 +147,9 @@ proc decodeE X, NN {
     local X = $X;
     local NN = $NN;
     if NN == 158 { # Check if v[x] is in keys pressed, and if true, skip an instruction by increasing pc by 2 (EX9E)
-        if (getregister(X) in keypad) > 0 {
-            cpu.pc += 2;
-        }
+        skipinstructionif (getregister(X) in keypad) > 0;
     } elif NN == 161 { # Check if v[x] is NOT in keys pressed, and if true, skip an instruction by increasing pc by 2 (EXA1)
-        if not ((getregister(X) in keypad) > 0) {
-            cpu.pc += 2;
-        }
+        skipinstructionif not ((getregister(X) in keypad) > 0);
     } else {
         panic;
     }
@@ -215,6 +194,20 @@ proc decodeF X, NN {
         }
     } else {
         panic;
+    }
+}
+
+proc skipinstructionif x {
+    if $x == true {
+        cpu.pc += 2;
+    }
+}
+
+proc setflagregisterif x {
+    if $x == true {
+        setregister("F", 1);
+    } else {
+        setregister("F", 0);
     }
 }
 

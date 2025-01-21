@@ -9,7 +9,8 @@ struct cpu {
     cols,
     rows,
     delaytimer,
-    soundtimer
+    soundtimer,
+    speed
 }
 
 onflag {
@@ -35,7 +36,8 @@ proc init {
         cols: 64,
         rows: 32,
         delaytimer: 0,
-        soundtimer: 0
+        soundtimer: 0,
+        speed: 24
     };
 }
 

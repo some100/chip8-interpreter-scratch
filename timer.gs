@@ -2,7 +2,6 @@ costumes "files/blank.svg";
 # sounds "files/440.wav"; So far there doesn't seem to be a way to include sounds if I'm reading the documentation correctly. So until that feature gets added, this won't have sound immediately OOB. 
 
 onflag {
-    initsoundtimer = 0;
     initdelaytimer = 0;
     broadcast "soundwait"; # Broadcast these events in order to handle them both at once in the same file
     broadcast "delaywait";
@@ -11,10 +10,10 @@ onflag {
 on "soundwait" {
     forever {
         set_volume 0;
-        wait_until soundtimer > 0; # Wait for a change in soundtimer variable.
+        wait_until cpu.soundtimer > 0; # Wait for a change in soundtimer variable.
         set_volume 100;
-        wait soundtimer / 60; # Sound timer counts down at 60 hz. Scratch runs at 30 FPS, so we can't totally accurately track that without doing something with timer variable. Instead, we simulate a wait by dividing by 60 and waiting for that many seconds. Programs can't read sound timer, so it doesn't matter if we actually count down or not
-        soundtimer = 0; # Set sound timer to 0, and loop back to wait again after
+        wait cpu.soundtimer / 60; # Sound timer counts down at 60 hz. Scratch runs at 30 FPS, so we can't totally accurately track that without doing something with timer variable. Instead, we simulate a wait by dividing by 60 and waiting for that many seconds. Programs can't read sound timer, so it doesn't matter if we actually count down or not
+        cpu.soundtimer = 0; # Set sound timer to 0, and loop back to wait again after
     }
 }
 
