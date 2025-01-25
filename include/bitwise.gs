@@ -7,8 +7,8 @@ func bwAND(x, y) {
         if (j % 2 == 1) and (k % 2 == 1) {
             result += i;
         }
-        j = floor (j / 2);
-        k = floor (k / 2);
+        j //= 2;
+        k //= 2;
         i *= 2;
     }
     return result;
@@ -23,8 +23,8 @@ func bwOR(x, y) {
         if (j % 2 == 1) or (k % 2 == 1) {
             result += i;
         }
-        j = floor (j / 2);
-        k = floor (k / 2);
+        j //= 2;
+        k //= 2;
         i *= 2;
     }
     return result;
@@ -39,8 +39,8 @@ func bwXOR(x, y) {
         if ((j % 2 == 1) and (k % 2 == 0)) or ((j % 2 == 0) and (k % 2 == 1)) {
             result += i;
         }
-        j = floor (j / 2);
-        k = floor (k / 2);
+        j //= 2;
+        k //= 2;
         i *= 2;
     }
     return result;
