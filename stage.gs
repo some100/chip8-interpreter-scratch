@@ -1,4 +1,4 @@
-costumes "files/blank.svg";
+costumes "files/background.svg";
 
 # Global variables
 
@@ -12,16 +12,20 @@ struct cpu {
     soundtimer,
     speed,
     scale,
-    hires
+    hires,
+    plane
 }
 
 struct quirks {
-    resetvF,
-    shiftY,
-    jumpwithoffsetvX,
-    incrementindex,
-    wrapping,
-    schipinstructions
+    shift,
+    memoryIncrementByX,
+    memoryLeaveIUnchanged,
+    wrap,
+    jump,
+    logic,
+    limitrpl,
+    schip,
+    xochip
 }
 
 onflag {
@@ -50,29 +54,41 @@ proc init {
         soundtimer: 0,
         speed: 24,
         scale: 7.5,
-        hires: 0
+        hires: 0,
+        plane: 1
     };
     quirks quirks = quirks {
-        resetvF: 0,
-        shiftY: 0,
-        jumpwithoffsetvX: 0,
-        incrementindex: 0,
-        wrapping: 0,
-        schipinstructions: 1
+        shift: 0,
+        memoryIncrementByX: 0,
+        memoryLeaveIUnchanged: 0,
+        wrap: 1,
+        jump: 0,
+        logic: 0,
+        limitrpl: 0,
+        schip: 1,
+        xochip: 1
     };
+    # If xochip is enabled then schip should also be enabled
+    # By default the XO-CHIP quirks set is enabled
 }
 
 proc initlists {
+    if quirks.xochip {
+        local memsize = 65536;
+    } else {
+        local memsize = 4096;
+    }
     local i = 1;
     delete registers;
     delete memory;
     delete display;
+    delete display1;
     delete stack;
     delete RPL;
     repeat 16 {
         add "00" to registers;
     }
-    repeat 4096 {
+    repeat memsize {
         add "00" to memory;
     }
     repeat length font {
@@ -110,6 +126,7 @@ proc restoreRPL {
 list registers;
 list stack;
 list display;
+list display1;
 list keypad;
 list realkeypad;
 list memory;

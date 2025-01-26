@@ -2,6 +2,10 @@ costumes "files/blank.svg";
 
 %include include/bitwise.gs
 
+%include include/display.gs
+
+%include include/quirks.gs
+
 %include include/misc.gs
 
 # this file does literally everything
@@ -45,8 +49,8 @@ proc decode {
         skipinstructionif getregister(X) == NN;
     } elif instruction == 4 { # Check if vX != NN, and if true, skip an instruction by increasing pc by 2 (4XNN)
         skipinstructionif getregister(X) != NN;
-    } elif instruction == 5 { # Check if vX == vY, and if true, skip an instruction by increasing pc by 2 (5XY0)
-        skipinstructionif getregister(X) == getregister(Y);
+    } elif instruction == 5 {
+        decode5 X, Y, N; # 0x5 opcode is moved to a separate proc
     } elif instruction == 6 { # Set vX to NN (6XNN)
         setregister(X, NN);
     } elif instruction == 7 { # Add NN to vX (255 as max, otherwise overflow) (7XNN)
@@ -58,63 +62,12 @@ proc decode {
     } elif instruction == "A" { # Set the index register to NNN (ANNN)
         cpu.index = NNN;
     } elif instruction == "B" { # Set pc to NNN + v0 or vX depending on behavior (BNNN)
-        if quirks.jumpwithoffsetvX {
-            local i = getregister(X); # Set i to vX if quirk is set
-        } else {
-            local i = getregister(0);
-        }
+        quirkjump;
         cpu.pc = NNN + i;
     } elif instruction == "C" { # Set vX to some random number that is ANDed with NN (CXNN)
         setregister(X, bwAND(random(0, 255), NN));
     } elif instruction == "D" { # Draw... (DXYN)
-        local xpos = getregister(X) % cpu.cols;
-        local ypos = getregister(Y) % cpu.rows;
-        local row = 0;
-        setregister("F", 0);
-        if N != 0 { # Check if N equals zero, this is equal to drawing a zero height sprite.
-            repeat N {
-                local col = 0;
-                repeat 8 {
-                     if quirks.wrapping or (((ypos + row) < cpu.rows) and ((xpos + col) < cpu.cols)) { # Check if wrapping is enabled, otherwise check if the expected pixel falls within the screen. If it doesn't don't draw the pixel entirely (clipping)
-                        local spritepixel = bwAND(getmemory(cpu.index + row), rshift(128, col)); # Get sprite from cpu.index, then add row since we're iterating through each row of the sprite. Then AND with 128 << col since we're going through each col of the sprite row
-                        local screenpixel = ((ypos + row) % cpu.rows) * cpu.cols + ((xpos + col) % cpu.cols); # Add the row of the sprite to vY and modulo cpu.rows (in case wrapping is needed), then multiply by cpu.cols to separate from our X coordinate. Then do basically the same for vX
-                        if spritepixel > 0 { # Check if there is a pixel in that area of the sprite before drawing/erasing
-                            if (screenpixel in display) > 0 { # Check if the screen pixel already exists in display, and erase if so
-                                setregister("F", 1);
-                                delete display[screenpixel in display];
-                            } else {
-                                add screenpixel to display;
-                            }
-                        }
-                    }
-                    col += 1;
-                }
-                row += 1;
-            }
-        } elif quirks.schipinstructions { # SUPERCHIP repurposes a 0-height sprite to draw a 16x16 sprite, so check if it's enabled. If not, don't do anything.
-            repeat 16 { # I don't even know how to explain the below. Thanks ajor for the implementation
-                local col = 0;
-                local i = cpu.index + row*2;
-                local addr = "0x" & memory[i] & memory[i + 1];
-                repeat 16 {
-                    if quirks.wrapping or (((ypos + row) < cpu.rows) and ((xpos + col) < cpu.cols)) {
-                        local spritepixel = bwAND(addr, rshift(32768, col));
-                        local screenpixel = ((ypos + row) % cpu.rows) * cpu.cols + ((xpos + col) % cpu.cols);
-                        if spritepixel > 0 {
-                            if (screenpixel in display) > 0 {
-                                setregister("F", 1);
-                                delete display[screenpixel in display];
-                            } else {
-                                add screenpixel to display;
-                            }
-                        }
-                    }
-                    col += 1;
-                }
-                row += 1;
-            }
-        }
-        broadcast "render";
+        draw X, Y, N;
     } elif instruction == "E" {
         decodeE X, NN; # 0xE opcode is moved to a separate proc
     } elif instruction == "F" {
@@ -127,12 +80,19 @@ proc decode {
 proc decode0 NN {
     local NN = $NN;
     if NN == 224 { # Clears the display, what this does is delete all of the display list, then render to make changes (00E0)
-        delete display;
+        if cpu.plane == 1 {
+            delete display;
+        } elif cpu.plane == 2 {
+            delete display1;
+        } elif cpu.plane == 3 {
+            delete display;
+            delete display1;
+        }
         broadcast "render";
     } elif NN == 238 { # Returns from subroutine by popping from stack (00EE)
         cpu.pc = stack[length stack];
         delete stack[length stack];
-    } elif quirks.schipinstructions {
+    } elif quirks.schip {
         decode0SCHIP NN;
     } else {
         panic;
@@ -142,25 +102,23 @@ proc decode0 NN {
 proc decode0SCHIP NN {
     local NN = $NN;
     if NN == 251 { # Scroll display right by 4 pixels (00FB) (SCHIP)
-        local i = 1;
-        repeat length display {
-            if floor(display[i] / cpu.cols) == floor((display[i] + 4) / cpu.cols) and ((display[i] + 4) < (cpu.cols * cpu.rows)) { # Check whether floor of display element by columns will be the same as floor of scrolled display element by columns, or determine whether it wraps or not. Additionally check for if its greater than number of pixels that can be on screen
-                display[i] = display[i] + 4; # If the pixel won't wrap, scroll right
-                i++; # Increment i (local variable) only when the pixel can be wrapped 
-            } else {
-                delete display[i]; # We don't want to wrap the display so just delete the element entirely
-            }
+        if cpu.plane == 1 {
+            scrolldisplayright(display);
+        } elif cpu.plane == 2 {
+            scrolldisplayright(display1);
+        } elif cpu.plane == 3 {
+            scrolldisplayright(display);
+            scrolldisplayright(display1);
         }
         broadcast "render";
     } elif NN == 252 { # Scroll display left by 4 pixels (00FC) (SCHIP)
-        local i = 1;
-        repeat length display {
-            if floor(display[i] / cpu.cols) == floor((display[i] - 4) / cpu.cols) and ((display[i] - 4) > 0) {
-                display[i] -= 4; # If the pixel won't wrap, scroll left
-                i++;
-            } else {
-                delete display[i];
-            }
+        if cpu.plane == 1 {
+            scrolldisplayleft(display);
+        } elif cpu.plane == 2 {
+            scrolldisplayleft(display1);
+        } elif cpu.plane == 3 {
+            scrolldisplayleft(display);
+            scrolldisplayleft(display1);
         }
         broadcast "render";
     } elif NN == 253 { # Stop VM immediately (00FD) (SCHIP)
@@ -177,19 +135,85 @@ proc decode0SCHIP NN {
         broadcast "changeres";
     } elif cpu.opcode[3] == "C" { # Special case, scroll display down by N pixels (00CN) (SCHIP)
         local N = ("0x" & cpu.opcode[4]) + 0;
-        local i = 1;
-        repeat length display {
-            if (display[i] + (cpu.cols * N)) < (cpu.cols * cpu.rows) {
-                display[i] += cpu.cols * N;
-                i++;
-            } else {
-                delete display[i];
-            }
+        if cpu.plane == 1 {
+            scrolldisplaydown(display, N);
+        } elif cpu.plane == 2 {
+            scrolldisplaydown(display1, N);
+        } elif cpu.plane == 3 {
+            scrolldisplaydown(display, N);
+            scrolldisplaydown(display1, N);
+        }
+        broadcast "render";
+    } elif quirks.xochip {
+        decode0XOCHIP;
+    } else {
+        panic;
+    } 
+}
+
+proc decode0XOCHIP {
+    if cpu.opcode[3] == "D" { # Scroll display up by N pixels (00DN) (XOCHIP)
+        local N = ("0x" & cpu.opcode[4]) + 0;
+        if cpu.plane == 1 {
+            scrolldisplayup(display, N);
+        } elif cpu.plane == 2 {
+            scrolldisplayup(display1, N);
+        } elif cpu.plane == 3 {
+            scrolldisplayup(display, N);
+            scrolldisplayup(display1, N);
         }
         broadcast "render";
     } else {
         panic;
-    } 
+    }
+}
+
+proc decode5 X, Y, N {
+    local X = $X;
+    local Y = $Y;
+    local N = $N;
+    if N == 0 { # Check if vX == vY, and if true, skip an instruction by increasing pc by 2 (5XY0)
+        skipinstructionif getregister(X) == getregister(Y);
+    } elif quirks.xochip {
+        decode5XOCHIP X, Y, N;
+    } else {
+        panic;
+    }
+}
+
+proc decode5XOCHIP X, Y, N {
+    local X = ("0x" & $X) + 1;
+    local Y = ("0x" & $Y) + 1;
+    local N = $N;
+    if N == 2 { # Store values of registers vX to vY (inclusive) into memory starting from index (5XY2) (XOCHIP)
+        local i = 0;
+        if Y >= X {
+            repeat (Y - X) + 1 {
+                memory[cpu.index + i] = dec2hex(registers[X + i]);
+                i++;
+            } # XO-CHIP instructions will never increment index register
+        } else { # If vX is greater than vY, reverse the order
+            repeat (X - Y) + 1 {
+                memory[cpu.index + i] = dec2hex(registers[Y - i]);
+                i++;
+            }
+        }
+    } elif N == 3 {
+        local i = 0;
+        if Y >= X {
+            repeat (Y - X) + 1 {
+                registers[X + i] = getmemory(cpu.index + i);
+                i++;
+            }
+        } else {
+            repeat (X - Y) + 1 {
+                registers[Y - i] = getmemory(cpu.index + i);
+                i++;
+            }
+        }
+    } else {
+        panic;
+    }
 }
 
 proc decode8 X, Y, N {
@@ -200,13 +224,13 @@ proc decode8 X, Y, N {
         setregister(X, getregister(Y));
     } elif N == 1 { # Set vX to vX | vY (bitwise OR) (8XY1)
         setregister(X, bwOR(getregister(X), getregister(Y)));
-        resetvF; # Reset vF if quirk resetvF is enabled to replicate old COSMAC VIP behavior
+        quirklogic; # Reset vF if quirk logic is enabled to replicate old COSMAC VIP behavior
     } elif N == 2 { # Set vX to vX & vY (bitwise AND) (8XY2)
         setregister(X, bwAND(getregister(X), getregister(Y)));
-        resetvF;
+        quirklogic;
     } elif N == 3 { # Set vX to vX ^ vY (bitwise XOR) (8XY3)
         setregister(X, bwXOR(getregister(X), getregister(Y)));
-        resetvF;
+        quirklogic;
     } elif N == 4 { # Add vY to vX (255 as max, otherwise overflow and set vF to 1) (8XY4)
         local i = getregister(X) + getregister(Y); # store comparison in advance to set vF
         setregister(X, i % 256);
@@ -215,10 +239,8 @@ proc decode8 X, Y, N {
         local i = getregister(X) - getregister(Y);
         setregister(X, i % 256);
         setflagregisterif i > 0;
-    } elif N == 6 { # Set vF to the least significant bit (or the bit that will be shifted out), then bit shift vX to the right by 1 (8XY6)
-        if quirks.shiftY {
-            setregister(X, getregister(Y));
-        }
+    } elif N == 6 { # Set vF to the least significant bit (or the bit that will be shifted out), write vY into vX (quirk) then bit shift vX to the right by 1 (8XY6)
+        quirkshift; # If quirk shift is enabled, shift vX in place
         local i = bwAND(getregister(X), 1); # store vX in advance to set vF using previous vX value
         setregister(X, rshift(getregister(X), 1));
         setregister("F", i);
@@ -227,9 +249,7 @@ proc decode8 X, Y, N {
         setregister(X, i % 256);
         setflagregisterif i > 0;
     } elif N == 14 { # Set vF to the least significant bit (or the bit that will be shifted out), then bit shift vX to the left by 1 (255 as max, otherwise overflow) (8XYE)
-        if quirks.shiftY {
-            setregister(X, getregister(Y));
-        }
+        quirkshift;
         local i = bwAND(getregister(X), 128);
         setregister(X, lshift(getregister(X), 1) % 256);
         setflagregisterif i > 0;
@@ -281,19 +301,17 @@ proc decodeF X, NN {
             memory[cpu.index + i] = dec2hex(registers[i + 1]);
             i++;
         }
-        if quirks.incrementindex {
-            cpu.index += X + 1;
-        }
+        quirkmemoryIncrementByX; # On the CHIP-48 interpreter for HP-48 calculators, index would increment by X instead of X + 1. If quirk memoryIncrementByX is enabled replicate that behavior
+        quirkmemoryLeaveIUnchanged; # On SUPERCHIP 1.1 index wouldn't be incremented at all. If quirk memoryLeaveIUnchanged is enabled replicate that behavior
     } elif NN == 101 { # Load values of memory[i] starting from index into registers v0 to vX (inclusive) (FX65)
         local i = 0;
         repeat (("0x" & X) + 1) {
             registers[i + 1] = getmemory(cpu.index + i);
             i++;
         }
-        if quirks.incrementindex {
-            cpu.index += X + 1;
-        }
-    } elif quirks.schipinstructions {
+        quirkmemoryIncrementByX;
+        quirkmemoryLeaveIUnchanged;
+    } elif quirks.schip {
         decodeFSCHIP X, NN;  
     } else {
         panic;
@@ -307,29 +325,101 @@ proc decodeFSCHIP X, NN {
         cpu.index = (getregister(X) * 10) + 81; # Small character fonts are stored from 0x00 to 0x50. In decimal that's 0 to 80. Our large font is stored just beyond that, so we multiply the value in vX by 10 for the character length, then set it at 80
     } elif NN == 117 { # Store values of registers v0 to vX (inclusive) into RPL persistent storage (FX75) (SCHIP)
         local i = 1;
-        repeat (("0x" & X) + 1) { # According to reference X must be between 0 and 7. I decided not to limit it in my implementation because that was a hardware limitation from the HP48.
-            RPL[i] = registers[i];
+        quirklimitrpl; # On SUPERCHIP, the maximum register that could be written to in RPL was v7. If quirk limitrpl is enabled replicate that behavior
+        repeat j {
+            RPL[i] = registers[i]; # DISCLAIMER: I haven't actually tested this instruction. There were no ROMs that I knew of to test this
             i++;
         }
         updateRPL;
     } elif NN == 133 { # Load values of RPL into registers v0 to vX (inclusive) (FX85) (SCHIP)
-        local i = 0;
-        repeat (("0x" & X) + 1) {
+        local i = 1;
+        quirklimitrpl;
+        repeat j {
             setregister(i, RPL[i + 1]);
             i++;
         }
+    } elif quirks.xochip {
+        decodeFXOCHIP X, NN;
     }
 }
 
-proc resetvF {
-    if quirks.resetvF {
-        setregister("F", 0);
+proc decodeFXOCHIP X, NN {
+    local X = $X;
+    local NN = $NN;
+    if NN == 0 { # Set index to some 16-bit address (F000, NNNN) (XOCHIP)
+        cpu.index = ("0x" & memory[cpu.pc] & memory[cpu.pc + 1]) + 0; # We already incremented cpu.pc in the fetch proc, so just get NNNN the same way
+        cpu.pc += 2; # Skip the next instruction (technically not even a real instruction)
+    } elif NN == 1 {
+        cpu.plane = X;
+    } elif NN == 2 {
+        # TBD (need audio to be added)
+    } elif NN == 58 {
+        # TBD (need audio to be added)
+    } else {
+        panic;
     }
+}
+
+proc draw X, Y, N {
+    local X = $X;
+    local Y = $Y;
+    local N = $N;
+    local xpos = getregister(X) % cpu.cols;
+    local ypos = getregister(Y) % cpu.rows;
+    local row = 0;
+    setregister("F", 0);
+    if N != 0 { # Check if N equals zero, this is equal to drawing a zero height sprite.
+        repeat N {
+            local col = 0;
+            repeat 8 {
+                 if quirks.wrap or (((ypos + row) < cpu.rows) and ((xpos + col) < cpu.cols)) { # Check if wrapping is enabled, otherwise check if the expected pixel falls within the screen. If it doesn't don't draw the pixel entirely (clipping)
+                    local spritepixel = bwAND(getmemory(cpu.index + row), rshift(128, col)); # Get sprite from cpu.index, then add row since we're iterating through each row of the sprite. Then AND with 128 << col since we're going through each col of the sprite row
+                    local screenpixel = ((ypos + row) % cpu.rows) * cpu.cols + ((xpos + col) % cpu.cols); # Add the row of the sprite to vY and modulo cpu.rows (in case wrapping is needed), then multiply by cpu.cols to separate from our X coordinate. Then do basically the same for vX
+                    if cpu.plane == 1 {
+                        setpixel(spritepixel, screenpixel, display);
+                    } elif cpu.plane == 2 {
+                        setpixel(spritepixel, screenpixel, display1);
+                    } elif cpu.plane == 3 {
+                        setpixel(spritepixel, screenpixel, display);
+                        setpixel(spritepixel, screenpixel, display);
+                    }
+                }
+                col += 1;
+            }
+            row += 1;
+        }
+    } elif quirks.schip { # SUPERCHIP repurposes a 0-height sprite to draw a 16x16 sprite, so check if it's enabled. If not, don't do anything.
+        repeat 16 { # I don't even know how to explain the below. Thanks ajor for the implementation
+            local col = 0;
+            local i = cpu.index + row*2;
+            local addr = "0x" & memory[i] & memory[i + 1];
+            repeat 16 {
+                if quirks.wrap or (((ypos + row) < cpu.rows) and ((xpos + col) < cpu.cols)) {
+                    local spritepixel = bwAND(addr, rshift(32768, col));
+                    local screenpixel = ((ypos + row) % cpu.rows) * cpu.cols + ((xpos + col) % cpu.cols);
+                    if cpu.plane == 1 {
+                        setpixel(spritepixel, screenpixel, display);
+                    } elif cpu.plane == 2 {
+                        setpixel(spritepixel, screenpixel, display1);
+                    } elif cpu.plane == 3 {
+                        setpixel(spritepixel, screenpixel, display);
+                        setpixel(spritepixel, screenpixel, display);
+                    }
+                }
+                col += 1;
+            }
+            row += 1;
+        }
+    }
+    broadcast "render";
 }
 
 proc skipinstructionif x {
     if $x == true {
         cpu.pc += 2;
+        if memory[cpu.pc - 2] & memory[cpu.pc - 1] == "F000" { # Check if we just skipped over F000 (a double wide instruction), and if so increment pc again
+            cpu.pc += 2;
+        }
     }
 }
 

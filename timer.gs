@@ -3,7 +3,7 @@ costumes "files/blank.svg";
 
 onflag {
     initdelaytimer = 0;
-    broadcast "soundwait"; # Broadcast these events in order to handle them both at once in the same file
+    broadcast "soundwait"; # Broadcast these events in order to handle them all at once in the same file
     broadcast "delaywait";
 }
 

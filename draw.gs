@@ -1,4 +1,6 @@
-costumes "files/pixel.svg", "files/pixelsmall.svg";
+costumes "files/pixel.svg" as "pixel", "files/pixelsmall.svg" as "pixelsmall";
+
+%include include/display.gs
 
 onflag {
     switch_costume "pixel";
@@ -6,6 +8,7 @@ onflag {
 }
 
 on "render" {
+    erase_all;
     render;
 }
 
@@ -20,13 +23,17 @@ on "changeres" {
 }
 
 proc render { # Render
-    local i = 1;
-    erase_all;
-    repeat length display {
-        local x = ((display[i] % cpu.cols) * cpu.scale) - 236.5; # Get the x coordinate from the display element with modulo of cpu.cols, multiply by 7.5 (scale), then subtract 236.5 because our pixel sprite touches the edge of the stage at x=236
-        local y = -1 * ((floor(display[i] / cpu.cols) * cpu.scale) - 120); # Isolate our y coordinate from the display element by dividing it by cpu.cols (floor of that to remove leftover decimal), multiply by 7.5 (scale), then subtract 120 to roughly center it on stage
-        goto x, y;
-        stamp; 
-        i++;
+    setcolorhb 0, -100;
+    renderdisplay(display);
+    if quirks.xochip {
+        setcolorhb 180, 200;
+        renderdisplay(display1);
+        setcolorhb -360, -54;
+        blendpixel(display, display1);
     }
+}
+
+proc setcolorhb hue, bright { # Set color in Hue and Brightness
+    set_color_effect ($hue / 3.6);
+    set_brightness_effect $bright;
 }
