@@ -24,7 +24,7 @@ on "delaywait" {
         inittimer = timer();
         until cpu.delaytimer <= 0 { # For delaytimer we create a variable that tracks the time that it first started. Because delaytimer ticks down at 60 hz, we get the difference between current time and the initial time (that's the time elapsed), then multiply by 60. Then subtract that number from delaytimer to get our new delaytimer
             timer = (timer() - inittimer) * 60;
-            cpu.delaytimer = initdelaytimer - timer;
+            cpu.delaytimer = floor (initdelaytimer - timer);
         }
         cpu.delaytimer = 0; # Set it back to 0 when we get below or equal to 0
     }

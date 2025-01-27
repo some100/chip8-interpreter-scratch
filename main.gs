@@ -238,7 +238,7 @@ proc decode8 X, Y, N {
     } elif N == 5 { # Subtract vY from vX (0 as min and vF = 1, otherwise underflow and set vF to 0) (8XY5)
         local i = getregister(X) - getregister(Y);
         setregister(X, i % 256);
-        setflagregisterif i > 0;
+        setflagregisterif i >= 0;
     } elif N == 6 { # Set vF to the least significant bit (or the bit that will be shifted out), write vY into vX (quirk) then bit shift vX to the right by 1 (8XY6)
         quirkshift; # If quirk shift is enabled, shift vX in place
         local i = bwAND(getregister(X), 1); # store vX in advance to set vF using previous vX value
@@ -247,7 +247,7 @@ proc decode8 X, Y, N {
     } elif N == 7 { # Set vX to vY - vX (subtract vX from vY and set vX to that result) (0 as min and vF = 1, otherwise underflow and set vF to 0) (8XY7)
         local i = getregister(Y) - getregister(X);
         setregister(X, i % 256);
-        setflagregisterif i > 0;
+        setflagregisterif i >= 0;
     } elif N == 14 { # Set vF to the least significant bit (or the bit that will be shifted out), then bit shift vX to the left by 1 (255 as max, otherwise overflow) (8XYE)
         quirkshift;
         local i = bwAND(getregister(X), 128);
@@ -277,6 +277,7 @@ proc decodeF X, NN {
         setregister(X, cpu.delaytimer);
     } elif NN == 10 { # Blocks execution until a key is pressed, then waits for that key to be released and records it in vX (FX0A)
         # TBD (seems working but this looks like a possible race condition)
+        # Fails FX0A test with error "NOT RELEASED" on cpu.speed > 3
         if key_pressed(realkeypad[1]) {
             registers[X + 1] = keypad[1];
             cpu.pc -= 2;

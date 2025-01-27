@@ -33,7 +33,7 @@ proc render { # Render
     }
 }
 
-proc setcolorhb hue, bright { # Set color in Hue and Brightness
+proc setcolorhb hue, bright { # Set color in Hue and Brightness (no saturation because Scratch is dumb)
     set_color_effect ($hue / 3.6);
     set_brightness_effect $bright;
 }
