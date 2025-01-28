@@ -59,11 +59,11 @@ func dec2hex(x) {
     local j = $x;
     local k = "0123456789ABCDEF";
     until j == 0 {
-        i = i & k[(j % 16) + 1];
+        i &= k[(j % 16) + 1];
         j = floor((j - (j % 16)) / 16);
     }
     until length i >= 2 {
-        i = i & "0";
+        i &= "0";
     }
     return i[2]&i[1]; # This is really bad but our inputs are at most 255 in our scenario so it'll do
 }

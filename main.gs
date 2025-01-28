@@ -90,8 +90,8 @@ proc decode0 NN {
         }
         broadcast "render";
     } elif NN == 238 { # Returns from subroutine by popping from stack (00EE)
-        cpu.pc = stack[length stack];
-        delete stack[length stack];
+        cpu.pc = stack["last"];
+        delete stack["last"];
     } elif quirks.schip {
         decode0SCHIP NN;
     } else {
@@ -234,9 +234,9 @@ proc decodeE X, NN {
     local X = $X;
     local NN = $NN;
     if NN == 158 { # Check if vX is in keys pressed, and if true, skip an instruction by increasing pc by 2 (EX9E)
-        skipinstructionif((getregister(X) in keypad) > 0);
+        skipinstructionif(getregister(X) in keypad);
     } elif NN == 161 { # Check if vX is NOT in keys pressed, and if true, skip an instruction by increasing pc by 2 (EXA1)
-        skipinstructionif(not ((getregister(X) in keypad) > 0));
+        skipinstructionif(not (getregister(X) in keypad));
     } else {
         panic;
     }
