@@ -46,9 +46,9 @@ proc decode {
         add cpu.pc to stack;
         cpu.pc = NNN;
     } elif instruction == 3 { # Check if vX == NN, and if true, skip an instruction by increasing pc by 2 (3XNN)
-        skipinstructionif getregister(X) == NN;
+        skipinstructionif(getregister(X) == NN);
     } elif instruction == 4 { # Check if vX != NN, and if true, skip an instruction by increasing pc by 2 (4XNN)
-        skipinstructionif getregister(X) != NN;
+        skipinstructionif(getregister(X) != NN);
     } elif instruction == 5 {
         decode5 X, Y, N; # 0x5 opcode is moved to a separate proc
     } elif instruction == 6 { # Set vX to NN (6XNN)
@@ -58,7 +58,7 @@ proc decode {
     } elif instruction == 8 {
         decode8 X, Y, N; # 0x8 opcode is moved to a separate proc
     } elif instruction == 9 { # Check if vX != vY, and if true, skip an instruction by increasing pc by 2 (9XY0)
-        skipinstructionif getregister(X) != getregister(Y);
+        skipinstructionif(getregister(X) != getregister(Y));
     } elif instruction == "A" { # Set the index register to NNN (ANNN)
         cpu.index = NNN;
     } elif instruction == "B" { # Set pc to NNN + v0 or vX depending on behavior (BNNN)
@@ -173,7 +173,7 @@ proc decode5 X, Y, N {
     local Y = $Y;
     local N = $N;
     if N == 0 { # Check if vX == vY, and if true, skip an instruction by increasing pc by 2 (5XY0)
-        skipinstructionif getregister(X) == getregister(Y);
+        skipinstructionif(getregister(X) == getregister(Y));
     } elif quirks.xochip {
         decode5XOCHIP X, Y, N;
     } else {
@@ -234,11 +234,11 @@ proc decode8 X, Y, N {
     } elif N == 4 { # Add vY to vX (255 as max, otherwise overflow and set vF to 1) (8XY4)
         local i = getregister(X) + getregister(Y); # store comparison in advance to set vF
         setregister(X, i % 256);
-        setflagregisterif i > 255;
+        setflagregisterif(i > 255);
     } elif N == 5 { # Subtract vY from vX (0 as min and vF = 1, otherwise underflow and set vF to 0) (8XY5)
         local i = getregister(X) - getregister(Y);
         setregister(X, i % 256);
-        setflagregisterif i >= 0;
+        setflagregisterif(i >= 0);
     } elif N == 6 { # Set vF to the least significant bit (or the bit that will be shifted out), write vY into vX (quirk) then bit shift vX to the right by 1 (8XY6)
         quirkshift; # If quirk shift is enabled, shift vX in place
         local i = bwAND(getregister(X), 1); # store vX in advance to set vF using previous vX value
@@ -247,12 +247,12 @@ proc decode8 X, Y, N {
     } elif N == 7 { # Set vX to vY - vX (subtract vX from vY and set vX to that result) (0 as min and vF = 1, otherwise underflow and set vF to 0) (8XY7)
         local i = getregister(Y) - getregister(X);
         setregister(X, i % 256);
-        setflagregisterif i >= 0;
+        setflagregisterif(i >= 0);
     } elif N == 14 { # Set vF to the least significant bit (or the bit that will be shifted out), then bit shift vX to the left by 1 (255 as max, otherwise overflow) (8XYE)
         quirkshift;
         local i = bwAND(getregister(X), 128);
         setregister(X, lshift(getregister(X), 1) % 256);
-        setflagregisterif i > 0;
+        setflagregisterif(i > 0);
     } else {
         panic;
     }
@@ -262,9 +262,9 @@ proc decodeE X, NN {
     local X = $X;
     local NN = $NN;
     if NN == 158 { # Check if vX is in keys pressed, and if true, skip an instruction by increasing pc by 2 (EX9E)
-        skipinstructionif (getregister(X) in keypad) > 0;
+        skipinstructionif((getregister(X) in keypad) > 0);
     } elif NN == 161 { # Check if vX is NOT in keys pressed, and if true, skip an instruction by increasing pc by 2 (EXA1)
-        skipinstructionif not ((getregister(X) in keypad) > 0);
+        skipinstructionif(not ((getregister(X) in keypad) > 0));
     } else {
         panic;
     }
@@ -413,23 +413,6 @@ proc draw X, Y, N {
         }
     }
     broadcast "render";
-}
-
-proc skipinstructionif x {
-    if $x == true {
-        cpu.pc += 2;
-        if memory[cpu.pc - 2] & memory[cpu.pc - 1] == "F000" { # Check if we just skipped over F000 (a double wide instruction), and if so increment pc again
-            cpu.pc += 2;
-        }
-    }
-}
-
-proc setflagregisterif x {
-    if $x == true {
-        setregister("F", 1);
-    } else {
-        setregister("F", 0);
-    }
 }
 
 proc updateRPL {
