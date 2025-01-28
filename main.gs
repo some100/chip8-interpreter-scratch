@@ -102,24 +102,10 @@ proc decode0 NN {
 proc decode0SCHIP NN {
     local NN = $NN;
     if NN == 251 { # Scroll display right by 4 pixels (00FB) (SCHIP)
-        if cpu.plane == 1 {
-            scrolldisplayright(display);
-        } elif cpu.plane == 2 {
-            scrolldisplayright(display1);
-        } elif cpu.plane == 3 {
-            scrolldisplayright(display);
-            scrolldisplayright(display1);
-        }
+        scrolltoplanes(scrolldisplayright, display, display1);
         broadcast "render";
     } elif NN == 252 { # Scroll display left by 4 pixels (00FC) (SCHIP)
-        if cpu.plane == 1 {
-            scrolldisplayleft(display);
-        } elif cpu.plane == 2 {
-            scrolldisplayleft(display1);
-        } elif cpu.plane == 3 {
-            scrolldisplayleft(display);
-            scrolldisplayleft(display1);
-        }
+        scrolltoplanes(scrolldisplayleft, display, display1);
         broadcast "render";
     } elif NN == 253 { # Stop VM immediately (00FD) (SCHIP)
         stop_all;
@@ -135,14 +121,7 @@ proc decode0SCHIP NN {
         broadcast "changeres";
     } elif cpu.opcode[3] == "C" { # Special case, scroll display down by N pixels (00CN) (SCHIP)
         local N = ("0x" & cpu.opcode[4]) + 0;
-        if cpu.plane == 1 {
-            scrolldisplaydown(display, N);
-        } elif cpu.plane == 2 {
-            scrolldisplaydown(display1, N);
-        } elif cpu.plane == 3 {
-            scrolldisplaydown(display, N);
-            scrolldisplaydown(display1, N);
-        }
+        scrollplanesvertically(scrolldisplaydown, display, display1, N);
         broadcast "render";
     } elif quirks.xochip {
         decode0XOCHIP;
@@ -154,14 +133,7 @@ proc decode0SCHIP NN {
 proc decode0XOCHIP {
     if cpu.opcode[3] == "D" { # Scroll display up by N pixels (00DN) (XOCHIP)
         local N = ("0x" & cpu.opcode[4]) + 0;
-        if cpu.plane == 1 {
-            scrolldisplayup(display, N);
-        } elif cpu.plane == 2 {
-            scrolldisplayup(display1, N);
-        } elif cpu.plane == 3 {
-            scrolldisplayup(display, N);
-            scrolldisplayup(display1, N);
-        }
+        scrollplanesvertically(scrolldisplayup, display, display1, N);
         broadcast "render";
     } else {
         panic;
@@ -376,14 +348,7 @@ proc draw X, Y, N {
                  if quirks.wrap or (((ypos + row) < cpu.rows) and ((xpos + col) < cpu.cols)) { # Check if wrapping is enabled, otherwise check if the expected pixel falls within the screen. If it doesn't don't draw the pixel entirely (clipping)
                     local spritepixel = bwAND(getmemory(cpu.index + row), rshift(128, col)); # Get sprite from cpu.index, then add row since we're iterating through each row of the sprite. Then AND with 128 << col since we're going through each col of the sprite row
                     local screenpixel = ((ypos + row) % cpu.rows) * cpu.cols + ((xpos + col) % cpu.cols); # Add the row of the sprite to vY and modulo cpu.rows (in case wrapping is needed), then multiply by cpu.cols to separate from our X coordinate. Then do basically the same for vX
-                    if cpu.plane == 1 {
-                        setpixel(spritepixel, screenpixel, display);
-                    } elif cpu.plane == 2 {
-                        setpixel(spritepixel, screenpixel, display1);
-                    } elif cpu.plane == 3 {
-                        setpixel(spritepixel, screenpixel, display);
-                        setpixel(spritepixel, screenpixel, display);
-                    }
+                    drawtoplanes(spritepixel, screenpixel, display, display1);
                 }
                 col += 1;
             }
@@ -398,14 +363,7 @@ proc draw X, Y, N {
                 if quirks.wrap or (((ypos + row) < cpu.rows) and ((xpos + col) < cpu.cols)) {
                     local spritepixel = bwAND(addr, rshift(32768, col));
                     local screenpixel = ((ypos + row) % cpu.rows) * cpu.cols + ((xpos + col) % cpu.cols);
-                    if cpu.plane == 1 {
-                        setpixel(spritepixel, screenpixel, display);
-                    } elif cpu.plane == 2 {
-                        setpixel(spritepixel, screenpixel, display1);
-                    } elif cpu.plane == 3 {
-                        setpixel(spritepixel, screenpixel, display);
-                        setpixel(spritepixel, screenpixel, display);
-                    }
+                    drawtoplanes(spritepixel, screenpixel, display, display1);
                 }
                 col += 1;
             }

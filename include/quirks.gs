@@ -4,7 +4,7 @@
     }                                                                                  \
 
 %define quirkmemoryIncrementByX                                                        \
-    if not quirks.memoryLeaveIUnchanged {                                              \
+    if quirks.memoryIncrementByX and not quirks.memoryLeaveIUnchanged {            \
         cpu.index += X;                                                                \
     }                                                                                  \
 

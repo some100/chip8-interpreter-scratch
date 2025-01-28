@@ -73,3 +73,27 @@
                 delete disp[i];                                                        \
             }                                                                          \
         }                                                                              \
+
+%define drawtoplanes(spritepixel, screenpixel, disp, disp2)                            \
+    if (cpu.plane == 1) or (cpu.plane == 3) {                                          \
+        setpixel(spritepixel, screenpixel, disp);                                      \
+    }                                                                                  \
+    if (cpu.plane == 2) or (cpu.plane == 3) {                                          \
+        setpixel(spritepixel, screenpixel, disp2);                                     \
+    }                                                                                  \
+
+%define scrolltoplanes(funct, disp, disp2)                                             \
+    if (cpu.plane == 1) or (cpu.plane == 3) {                                          \
+        funct(disp);                                                                   \
+    }                                                                                  \
+    if (cpu.plane == 2) or (cpu.plane == 3) {                                          \
+        funct(disp2);                                                                  \
+    }                                                                                  \
+
+%define scrollplanesvertically(funct, disp, disp2, N)                                  \
+    if (cpu.plane == 1) or (cpu.plane == 3) {                                          \
+        funct(disp, N);                                                                \
+    }                                                                                  \
+    if (cpu.plane == 2) or (cpu.plane == 3) {                                          \
+        funct(disp2, N);                                                               \
+    }                                                                                  \
