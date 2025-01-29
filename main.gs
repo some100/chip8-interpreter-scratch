@@ -248,13 +248,17 @@ proc decodeF X, NN {
     if NN == 7 { # Set vX to delaytimer (FX07)
         setregister(X, cpu.delaytimer);
     } elif NN == 10 { # Blocks execution until a key is pressed, then waits for that key to be released and records it in vX (FX0A)
-        # TBD (seems working but this looks like a possible race condition)
-        # Fails FX0A test with error "NOT RELEASED" on cpu.speed > 3
+        if cpu.speed != 3 {
+            initspeed = cpu.speed;
+            cpu.speed = 1;
+        }
         if key_pressed(realkeypad[1]) {
             registers[X + 1] = keypad[1];
             cpu.pc -= 2;
         } elif registers[X + 1] != keypad[1] {
             cpu.pc -= 2;
+        } else {
+            cpu.speed = initspeed;
         }
     } elif NN == 21 { # Set delaytimer to vX (FX15)
         cpu.delaytimer = getregister(X);
