@@ -248,7 +248,7 @@ proc decodeF X, NN {
     if NN == 7 { # Set vX to delaytimer (FX07)
         setregister(X, cpu.delaytimer);
     } elif NN == 10 { # Blocks execution until a key is pressed, then waits for that key to be released and records it in vX (FX0A)
-        if cpu.speed != 3 {
+        if cpu.speed != 1 {
             initspeed = cpu.speed;
             cpu.speed = 1;
         }
